@@ -7,13 +7,15 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("🌱 Seeding database...");
 
-  // Wipe all existing data cleanly in the right order
   console.log("  🗑  Wiping old data…");
   await prisma.auditLog.deleteMany();
   await prisma.playerMatchScore.deleteMany();
+  await prisma.tradeLog.deleteMany();
+  await prisma.teamRoster.deleteMany();
   await prisma.match.deleteMany();
   await prisma.player.deleteMany();
   await prisma.fantasyTeam.deleteMany();
+  await prisma.leagueSettings.deleteMany();
 
   for (const squad of SQUADS) {
     const team = await prisma.fantasyTeam.create({
@@ -36,7 +38,6 @@ async function main() {
       });
     }
 
-    // Create initial roster (no C/VC set yet)
     await prisma.teamRoster.upsert({
       where: { fantasyTeamId: team.id },
       update: {},
@@ -52,7 +53,17 @@ async function main() {
     create: { id: 1, name: "Fantasy IPL 2026" },
   });
 
-  console.log(`\n✅ Seed complete — ${SQUADS.length} teams, ${SQUADS.reduce((s, t) => s + t.players.length, 0)} players.`);
+  console.log(
+    `\n✅ Seed complete — ${SQUADS.length} teams, ${SQUADS.reduce((s, t) => s + t.players.length, 0)} players.`
+  );
 }
 
-main().catch(console.error).finally(() => prisma.$disconnect());
+main()
+  .then(async () => {
+    await prisma.$disconnect();
+  })
+  .catch(async (e) => {
+    console.error(e);
+    await prisma.$disconnect();
+    process.exit(1);
+  });
