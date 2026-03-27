@@ -62,7 +62,7 @@ export default function Header({ onSettingsOpen }) {
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
               }}>
-                THE GRID
+                THE ANNUAL FANTASY IPL AUCTION
               </h1>
               <div style={{ fontFamily: V.fontMono, fontSize: 10, color: V.sub, marginTop: 3, letterSpacing: "0.06em" }}>
                 {matches.length} matches ◆ {leaderboard.length} squads
