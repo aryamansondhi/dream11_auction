@@ -123,79 +123,152 @@ router.post("/:teamId/captain", requireAdmin, async (req, res) => {
 router.post("/:teamId/swap", requireAdmin, async (req, res) => {
   try {
     const { teamId } = req.params;
-    const { playerOutId, playerInId, matchesPlayedByOut = 0, notes, countAsTrade = true } = req.body;
+    const {
+      playerOutId,
+      playerInId,
+      incomingName,
+      incomingRole,
+      incomingIplTeam,
+      matchesPlayedByOut = 0,
+      notes,
+      countAsTrade = true,
+    } = req.body;
 
-    if (!playerOutId || !playerInId) return res.status(400).json({ error: "playerOutId and playerInId required" });
-    if (playerOutId === playerInId) return res.status(400).json({ error: "Same player" });
-
-    const roster = await prisma.teamRoster.findUnique({ where: { fantasyTeamId: teamId } });
-    if (!roster) return res.status(404).json({ error: "Roster not found" });
-    if (countAsTrade && roster.tradesUsed >= roster.maxTrades) {
-      return res.status(400).json({ error: `Trade limit reached (${roster.maxTrades}/${roster.maxTrades} used)` });
+    if (!playerOutId) {
+      return res.status(400).json({ error: "playerOutId required" });
     }
 
-    // playerOut must be on this team
-    const outPlayer = await prisma.player.findFirst({ where: { id: playerOutId, fantasyTeamId: teamId } });
-    if (!outPlayer) return res.status(400).json({ error: "Player being swapped out is not on this team" });
+    const roster = await prisma.teamRoster.findUnique({
+      where: { fantasyTeamId: teamId },
+    });
 
-    // playerIn must exist (but can be from any team in the DB — just needs to be registered)
-    const inPlayer = await prisma.player.findUnique({ where: { id: playerInId } });
-    if (!inPlayer) return res.status(404).json({ error: "Incoming player not found" });
+    if (!roster) {
+      return res.status(404).json({ error: "Roster not found" });
+    }
 
-    // Move the incoming player to this team
-    const wasCapOrVC = outPlayer.id === roster.captainId || outPlayer.id === roster.viceCaptainId;
+    if (countAsTrade && roster.tradesUsed >= roster.maxTrades) {
+      return res.status(400).json({
+        error: `Trade limit reached (${roster.maxTrades}/${roster.maxTrades} used)`,
+      });
+    }
 
-    await prisma.$transaction([
-      // Move incoming player to this team
-      prisma.player.update({
+    const outPlayer = await prisma.player.findFirst({
+      where: { id: playerOutId, fantasyTeamId: teamId },
+    });
+
+    if (!outPlayer) {
+      return res.status(400).json({
+        error: "Player being swapped out is not on this team",
+      });
+    }
+
+    let finalIncomingPlayerId = null;
+    let finalIncomingPlayerName = null;
+
+    if (playerInId) {
+      if (playerInId === playerOutId) {
+        return res.status(400).json({ error: "Same player" });
+      }
+
+      const inPlayer = await prisma.player.findUnique({
         where: { id: playerInId },
-        data: { fantasyTeamId: teamId },
-      }),
-      // Move outgoing player to a "free agent" state — null fantasyTeamId
-      // Actually, keep them — just they're no longer on this team's active roster
-      // We track this via TradeLog
-      prisma.teamRoster.update({
+      });
+
+      if (!inPlayer) {
+        return res.status(404).json({ error: "Incoming player not found" });
+      }
+
+      if (inPlayer.fantasyTeamId && inPlayer.fantasyTeamId !== teamId) {
+        return res.status(400).json({
+          error: "Incoming player already belongs to another fantasy squad",
+        });
+      }
+
+      finalIncomingPlayerId = inPlayer.id;
+      finalIncomingPlayerName = inPlayer.name;
+    } else {
+      if (!incomingName || !incomingRole || !incomingIplTeam) {
+        return res.status(400).json({
+          error: "Manual incoming player details are required",
+        });
+      }
+    }
+
+    let createdManualPlayer = null;
+
+    await prisma.$transaction(async (tx) => {
+      if (playerInId) {
+        await tx.player.update({
+          where: { id: playerInId },
+          data: { fantasyTeamId: teamId },
+        });
+      } else {
+        createdManualPlayer = await tx.player.create({
+          data: {
+            name: incomingName.trim(),
+            role: incomingRole,
+            iplTeam: incomingIplTeam,
+            fantasyTeamId: teamId,
+          },
+        });
+
+        finalIncomingPlayerId = createdManualPlayer.id;
+        finalIncomingPlayerName = createdManualPlayer.name;
+      }
+
+      await tx.player.update({
+        where: { id: playerOutId },
+        data: { fantasyTeamId: null },
+      });
+
+      await tx.teamRoster.update({
         where: { fantasyTeamId: teamId },
         data: {
           tradesUsed: countAsTrade ? roster.tradesUsed + 1 : roster.tradesUsed,
-          // If C/VC was swapped out, clear them
           ...(outPlayer.id === roster.captainId ? { captainId: null } : {}),
           ...(outPlayer.id === roster.viceCaptainId ? { viceCaptainId: null } : {}),
         },
-      }),
-      prisma.tradeLog.create({
+      });
+
+      await tx.tradeLog.create({
         data: {
           fantasyTeamId: teamId,
           tradeType: "swap",
           playerOutId,
-          playerInId,
+          playerInId: finalIncomingPlayerId,
           matchesPlayedByOut: Number(matchesPlayedByOut),
           notes: notes || null,
         },
-      }),
-      prisma.auditLog.create({
+      });
+
+      await tx.auditLog.create({
         data: {
           action: "player_swap",
           details: {
             teamId,
             out: outPlayer.name,
-            in: inPlayer.name,
+            in: finalIncomingPlayerName,
             matchesPlayedByOut,
-            tradesUsedAfter: roster.tradesUsed + 1,
+            tradesUsedAfter: countAsTrade ? roster.tradesUsed + 1 : roster.tradesUsed,
           },
         },
-      }),
-    ]);
+      });
+    });
+
+    const newTradesUsed = countAsTrade ? roster.tradesUsed + 1 : roster.tradesUsed;
+    const newTradesRemaining = roster.maxTrades - newTradesUsed;
 
     broadcast("roster_updated", { teamId, type: "swap" });
+
     res.json({
       success: true,
-      tradesUsed: roster.tradesUsed + 1,
-      tradesRemaining: roster.maxTrades - roster.tradesUsed - 1,
-      message: `${outPlayer.name} → ${inPlayer.name}. ${roster.maxTrades - roster.tradesUsed - 1} trades remaining.`,
-      equalizationNote: matchesPlayedByOut > 0
-        ? `${inPlayer.name}'s points will count from match ${matchesPlayedByOut + 1} onwards.`
-        : null,
+      tradesUsed: newTradesUsed,
+      tradesRemaining: newTradesRemaining,
+      message: `${outPlayer.name} → ${finalIncomingPlayerName}. ${newTradesRemaining} trades remaining.`,
+      equalizationNote:
+        matchesPlayedByOut > 0
+          ? `${finalIncomingPlayerName}'s points will count from match ${Number(matchesPlayedByOut) + 1} onwards.`
+          : null,
     });
   } catch (e) {
     console.error(e);

@@ -27,8 +27,8 @@ model Player {
   iplTeam   String
   createdAt DateTime @default(now())
 
-  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id])
-  fantasyTeamId String
+  fantasyTeam   FantasyTeam? @relation(fields: [fantasyTeamId], references: [id])
+  fantasyTeamId String?
 
   matchScores PlayerMatchScore[]
 
