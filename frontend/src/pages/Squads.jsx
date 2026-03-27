@@ -12,11 +12,15 @@ export default function Squads() {
 
   useEffect(() => {
     if (!leaderboard.length) fetchLeague();
-    rostersApi.getAll().then(res => {
-      const map = {};
-      res.rosters.forEach(r => { map[r.teamId] = r; });
-      setRosterMap(map);
-    }).catch(() => {});
+    rostersApi.getAll()
+      .then(res => {
+        const map = {};
+        res.rosters.forEach(r => { map[r.teamId] = r; });
+        setRosterMap(map);
+      })
+      .catch((err) => {
+        console.error("Failed to load rosters", err);
+      });
   }, []);
 
   const ranked = [...leaderboard].sort((a, b) => b.totalPoints - a.totalPoints);

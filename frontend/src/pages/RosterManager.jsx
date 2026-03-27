@@ -72,7 +72,11 @@ function SetCapVC({ roster, onDone, onBack }) {
 
 function SwapPlayer({ roster, allPlayers, onDone, onBack }) {
   const [playerOutId, setPlayerOutId] = useState("");
+  const [incomingMode, setIncomingMode] = useState("manual"); // "manual" | "existing"
   const [playerInId, setPlayerInId] = useState("");
+  const [incomingName, setIncomingName] = useState("");
+  const [incomingRole, setIncomingRole] = useState("");
+  const [incomingIplTeam, setIncomingIplTeam] = useState("");
   const [matchesPlayedByOut, setMatchesPlayedByOut] = useState(0);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -80,14 +84,66 @@ function SwapPlayer({ roster, allPlayers, onDone, onBack }) {
   const [err, setErr] = useState("");
 
   const playerOut = roster.players.find(p => p.id === playerOutId);
-  const myIds = new Set(roster.players.map(p => p.id));
-  const eligible = allPlayers.filter(p => !myIds.has(p.id) && (playerOut ? p.role === playerOut.role : true));
+
+  // Do not allow taking players from another fantasy squad.
+  // With your current data model, there may be zero existing free agents,
+  // so manual mode is the practical path.
+  const existingIncomingOptions = allPlayers.filter(
+    p => !roster.players.some(mine => mine.id === p.id) && !p.fantasyTeamId
+  );
+
+  const manualValid = incomingName.trim() && incomingRole && incomingIplTeam;
+  const existingValid = !!playerInId;
+  const canSubmit =
+    !!playerOutId &&
+    (incomingMode === "manual" ? manualValid : existingValid) &&
+    (!countAsTrade || roster.tradesRemaining > 0);
+
+  const incomingLabel =
+    incomingMode === "manual"
+      ? incomingName || "manual player"
+      : (existingIncomingOptions.find(p => p.id === playerInId)?.name || "");
 
   const save = async () => {
-    if (!playerOutId || !playerInId) { setErr("Select both players."); return; }
-    setSaving(true); setErr("");
-    try { const res = await rostersApi.swap(roster.teamId, { playerOutId, playerInId, matchesPlayedByOut, notes, countAsTrade }); onDone(res.message, res.equalizationNote); }
-    catch (e) { setErr(e.error || "Swap failed"); }
+    if (!playerOutId) {
+      setErr("Select a player to remove.");
+      return;
+    }
+
+    if (incomingMode === "manual" && !manualValid) {
+      setErr("Fill incoming player name, role, and IPL team.");
+      return;
+    }
+
+    if (incomingMode === "existing" && !playerInId) {
+      setErr("Select an incoming player.");
+      return;
+    }
+
+    setSaving(true);
+    setErr("");
+
+    try {
+      const body = {
+        playerOutId,
+        matchesPlayedByOut,
+        notes,
+        countAsTrade,
+        ...(incomingMode === "existing"
+          ? { playerInId }
+          : {
+              incomingName: incomingName.trim(),
+              incomingRole,
+              incomingIplTeam,
+            }),
+      };
+
+      const res = await rostersApi.swap(roster.teamId, body);
+      onDone(res.message, res.equalizationNote);
+    } catch (e) {
+      setErr(e.error || "Swap failed");
+    }
+
     setSaving(false);
   };
 
@@ -95,49 +151,178 @@ function SwapPlayer({ roster, allPlayers, onDone, onBack }) {
     <div>
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20 }}>
         <GhostBtn onClick={onBack}>← BACK</GhostBtn>
-        <div style={{ fontFamily: V.fontHead, fontSize: 12, color: V.cyan, textShadow: `0 0 6px ${V.cyan}` }}>PLAYER_SWAP.EXE</div>
+        <div style={{ fontFamily: V.fontHead, fontSize: 12, color: V.cyan, textShadow: `0 0 6px ${V.cyan}` }}>
+          PLAYER_SWAP.EXE
+        </div>
       </div>
-      <div style={{ fontFamily: V.fontMono, fontSize: 12, color: V.text, marginBottom: 4 }}>{roster.teamName}</div>
-      <div style={{ marginBottom: 16 }}><TradeCounter used={roster.tradesUsed} max={roster.maxTrades} /></div>
-      {roster.tradesRemaining <= 0 && <div style={{ fontFamily: V.fontMono, fontSize: 12, color: V.red, padding: "8px 12px", background: V.red + "10", border: `1px solid ${V.red}40`, marginBottom: 12 }}>⚠ TRADE LIMIT REACHED</div>}
+
+      <div style={{ fontFamily: V.fontMono, fontSize: 12, color: V.text, marginBottom: 4 }}>
+        {roster.teamName}
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <TradeCounter used={roster.tradesUsed} max={roster.maxTrades} />
+      </div>
+
+      {roster.tradesRemaining <= 0 && (
+        <div style={{ fontFamily: V.fontMono, fontSize: 12, color: V.red, padding: "8px 12px", background: V.red + "10", border: `1px solid ${V.red}40`, marginBottom: 12 }}>
+          ⚠ TRADE LIMIT REACHED
+        </div>
+      )}
+
       <ErrorBox message={err} />
 
       <div style={{ display: "grid", gap: 14 }}>
-        <div><Label>Player out (from {roster.teamName})</Label>
-          <Select value={playerOutId} onChange={e => { setPlayerOutId(e.target.value); setPlayerInId(""); }}>
+        <div>
+          <Label>Player out (from {roster.teamName})</Label>
+          <Select
+            value={playerOutId}
+            onChange={e => {
+              setPlayerOutId(e.target.value);
+              setPlayerInId("");
+              setIncomingName("");
+              setIncomingRole("");
+              setIncomingIplTeam("");
+            }}
+          >
             <option value="">Select player to remove…</option>
-            {ROLE_ORDER.map(role => { const g = roster.players.filter(p => p.role === role); if (!g.length) return null; return <optgroup key={role} label={role}>{g.map(p => <option key={p.id} value={p.id}>{p.name} · {p.iplTeam}{p.isCaptain ? " ★C" : p.isViceCaptain ? " ★VC" : ""}</option>)}</optgroup>; })}
+            {ROLE_ORDER.map(role => {
+              const g = roster.players.filter(p => p.role === role);
+              if (!g.length) return null;
+              return (
+                <optgroup key={role} label={role}>
+                  {g.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} · {p.iplTeam}{p.isCaptain ? " ★C" : p.isViceCaptain ? " ★VC" : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </Select>
         </div>
+
         {playerOut && (
-          <div><Label>Player in — {playerOut.role} only</Label>
-            <Select value={playerInId} onChange={e => setPlayerInId(e.target.value)}>
-              <option value="">Select incoming player…</option>
-              {IPL_TEAMS.map(t => { const g = eligible.filter(p => p.iplTeam === t); if (!g.length) return null; return <optgroup key={t} label={t}>{g.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>; })}
-            </Select>
-          </div>
+          <>
+            <div>
+              <Label>Incoming player</Label>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <GhostBtn onClick={() => setIncomingMode("manual")}>
+                  {incomingMode === "manual" ? "● MANUAL ENTRY" : "MANUAL ENTRY"}
+                </GhostBtn>
+                <GhostBtn onClick={() => setIncomingMode("existing")}>
+                  {incomingMode === "existing" ? "● EXISTING PLAYER" : "EXISTING PLAYER"}
+                </GhostBtn>
+              </div>
+            </div>
+
+            {incomingMode === "existing" ? (
+              <div>
+                <Label>Player in (any role)</Label>
+                <Select value={playerInId} onChange={e => setPlayerInId(e.target.value)}>
+                  <option value="">Select incoming player…</option>
+                  {IPL_TEAMS.map(t => {
+                    const g = existingIncomingOptions.filter(p => p.iplTeam === t);
+                    if (!g.length) return null;
+                    return (
+                      <optgroup key={t} label={t}>
+                        {g.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} · {p.role}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
+                </Select>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label>Incoming player name</Label>
+                  <Input
+                    type="text"
+                    value={incomingName}
+                    onChange={e => setIncomingName(e.target.value)}
+                    placeholder="e.g. Harshit Rana"
+                  />
+                </div>
+
+                <div>
+                  <Label>Incoming player role</Label>
+                  <Select value={incomingRole} onChange={e => setIncomingRole(e.target.value)}>
+                    <option value="">Select role…</option>
+                    <option value="Batsman">Batsman</option>
+                    <option value="Bowler">Bowler</option>
+                    <option value="All-Rounder">All-Rounder</option>
+                    <option value="Wicket-Keeper">Wicket-Keeper</option>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Incoming IPL team</Label>
+                  <Select value={incomingIplTeam} onChange={e => setIncomingIplTeam(e.target.value)}>
+                    <option value="">Select IPL team…</option>
+                    {IPL_TEAMS.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </Select>
+                </div>
+              </>
+            )}
+          </>
         )}
+
         <div>
           <Label>Matches played by {playerOut?.name || "outgoing"} this season</Label>
-          <div style={{ fontFamily: V.fontMono, fontSize: 10, color: V.sub, marginBottom: 6 }}>Incoming player's points count from match {(matchesPlayedByOut || 0) + 1} onwards</div>
-          <Input type="number" min="0" value={matchesPlayedByOut} onChange={e => setMatchesPlayedByOut(parseInt(e.target.value) || 0)} style={{ width: 72 }} />
+          <div style={{ fontFamily: V.fontMono, fontSize: 10, color: V.sub, marginBottom: 6 }}>
+            Incoming player's points count from match {(matchesPlayedByOut || 0) + 1} onwards
+          </div>
+          <Input
+            type="number"
+            min="0"
+            value={matchesPlayedByOut}
+            onChange={e => setMatchesPlayedByOut(parseInt(e.target.value) || 0)}
+            style={{ width: 72 }}
+          />
         </div>
-        <div><Label>Notes (optional)</Label><Input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. injury replacement" /></div>
+
+        <div>
+          <Label>Notes (optional)</Label>
+          <Input
+            type="text"
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="e.g. injury replacement"
+          />
+        </div>
       </div>
 
-      {playerOut && playerInId && (
+      {playerOut && incomingLabel && (
         <div style={{ background: "rgba(0,255,255,0.04)", border: `1px solid ${V.border}`, padding: "10px 14px", margin: "16px 0", fontFamily: V.fontMono, fontSize: 11, color: V.sub, lineHeight: 1.7 }}>
-          <span style={{ color: V.text }}>{playerOut.name}</span>'s points retained. <span style={{ color: V.cyan }}>{allPlayers.find(p=>p.id===playerInId)?.name}</span> scores from match {(matchesPlayedByOut||0)+1}. <span style={{ color: V.orange }}>{roster.tradesRemaining - 1} trades remaining after.</span>
+          <span style={{ color: V.text }}>{playerOut.name}</span>'s points retained.{" "}
+          <span style={{ color: V.cyan }}>{incomingLabel}</span> scores from match {(matchesPlayedByOut || 0) + 1}.{" "}
+          <span style={{ color: V.orange }}>
+            {countAsTrade ? roster.tradesRemaining - 1 : roster.tradesRemaining} trades remaining after.
+          </span>
         </div>
       )}
+
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: "8px 12px", background: "rgba(255,153,0,0.08)", border: `1px solid rgba(255,153,0,0.3)` }}>
-        <input type="checkbox" id="countSwapTrade" checked={countAsTrade} onChange={e => setCountAsTrade(e.target.checked)} style={{ accentColor: V.orange, width: 14, height: 14 }} />
+        <input
+          type="checkbox"
+          id="countSwapTrade"
+          checked={countAsTrade}
+          onChange={e => setCountAsTrade(e.target.checked)}
+          style={{ accentColor: V.orange, width: 14, height: 14 }}
+        />
         <label htmlFor="countSwapTrade" style={{ fontFamily: V.fontMono, fontSize: 11, color: V.orange, cursor: "pointer", userSelect: "none" }}>
           Count as trade — uncheck for admin corrections
         </label>
       </div>
-      <PrimaryBtn onClick={save} disabled={!playerOutId || !playerInId || (countAsTrade && roster.tradesRemaining <= 0) || saving}>
-        {saving ? "PROCESSING…" : "▶ CONFIRM SWAP — 1 TRADE"}
+
+      <PrimaryBtn onClick={save} disabled={!canSubmit || saving}>
+        {saving ? "PROCESSING…" : `▶ CONFIRM SWAP${countAsTrade ? " — 1 TRADE" : " — NO TRADE COST"}`}
       </PrimaryBtn>
     </div>
   );
