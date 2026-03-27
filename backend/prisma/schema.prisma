@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model FantasyTeam {
+  id        String   @id
+  name      String
+  manager   String
+  accent    String
+  createdAt DateTime @default(now())
+
+  players      Player[]
+  matchScores  PlayerMatchScore[]
+  roster       TeamRoster?
+  tradeLogs    TradeLog[]
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  name      String
+  role      String
+  iplTeam   String
+  createdAt DateTime @default(now())
+
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id])
+  fantasyTeamId String
+
+  matchScores PlayerMatchScore[]
+
+  @@unique([name, fantasyTeamId])
+  @@index([name])
+  @@index([iplTeam])
+}
+
+model Match {
+  id          String   @id @default(cuid())
+  label       String
+  iplTeam1    String
+  iplTeam2    String
+  matchDate   String?
+  cricketApiId String? @unique
+  status      String   @default("scored") // scored | rolled_back
+  source      String   // auto_api | screenshot | manual
+  scoredBy    String   @default("admin")
+  rawPayload  Json?    // full API response stored for audit
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  playerScores PlayerMatchScore[]
+  auditLogs    AuditLog[]
+}
+
+model PlayerMatchScore {
+  id        String   @id @default(cuid())
+  points    Int
+  played    Boolean  @default(false)
+
+  // Batting
+  runs          Int @default(0)
+  balls         Int @default(0)
+  fours         Int @default(0)
+  sixes         Int @default(0)
+
+  // Bowling
+  wickets       Int    @default(0)
+  overs         Float  @default(0)
+  runsConceded  Int    @default(0)
+  dotBalls      Int    @default(0)
+  maidens       Int    @default(0)
+  lbwBowled     Int    @default(0)
+
+  // Fielding
+  catches       Int @default(0)
+  stumpings     Int @default(0)
+  directRO      Int @default(0)
+  indirectRO    Int @default(0)
+
+  // Meta
+  isCaptain           Boolean @default(false)
+  isViceCaptain       Boolean @default(false)
+  isEligible          Boolean @default(true)   // false if trade equalization blocks it
+  nameMatchConfidence Float   @default(1.0)
+  nameUsed            String?
+
+  createdAt DateTime @default(now())
+
+  match         Match       @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  matchId       String
+  player        Player      @relation(fields: [playerId], references: [id])
+  playerId      String
+  fantasyTeam   FantasyTeam @relation(fields: [fantasyTeamId], references: [id])
+  fantasyTeamId String
+
+  @@unique([matchId, playerId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String   // match_scored | match_rolled_back | stat_corrected | auto_score_attempted
+  details   Json
+  createdAt DateTime @default(now())
+
+  match   Match?  @relation(fields: [matchId], references: [id])
+  matchId String?
+}
+
+model LeagueSettings {
+  id    Int    @id @default(1)
+  name  String @default("Fantasy IPL 2026")
+}
+
+model TeamRoster {
+  id            String   @id @default(cuid())
+  fantasyTeamId String   @unique
+  captainId     String?
+  viceCaptainId String?
+  tradesUsed    Int      @default(0)
+  maxTrades     Int      @default(10)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  fantasyTeam FantasyTeam @relation(fields: [fantasyTeamId], references: [id])
+}
+
+model TradeLog {
+  id                 String   @id @default(cuid())
+  fantasyTeamId      String
+  tradeType          String   // "swap" | "captain" | "vc"
+  playerOutId        String?
+  playerInId         String?
+  oldCaptainId       String?
+  newCaptainId       String?
+  oldVCId            String?
+  newVCId            String?
+  matchesPlayedByOut Int      @default(0)
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  fantasyTeam FantasyTeam @relation(fields: [fantasyTeamId], references: [id])
+}

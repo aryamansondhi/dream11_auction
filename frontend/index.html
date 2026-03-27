@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fantasy IPL 2026 ◆ The Grid</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --void:      #090014;
+      --card:      #1a103c;
+      --cardHi:    #231548;
+      --border:    #2D1B4E;
+      --magenta:   #FF00FF;
+      --cyan:      #00FFFF;
+      --orange:    #FF9900;
+      --text:      #E0E0E0;
+      --sub:       rgba(224,224,224,0.55);
+      --muted:     rgba(224,224,224,0.15);
+      --dim:       rgba(0,0,0,0.5);
+
+      --font-head: 'Orbitron', sans-serif;
+      --font-mono: 'Share Tech Mono', monospace;
+
+      --glow-m:    0 0 8px #FF00FF, 0 0 20px rgba(255,0,255,0.4);
+      --glow-c:    0 0 8px #00FFFF, 0 0 20px rgba(0,255,255,0.4);
+      --glow-o:    0 0 8px #FF9900, 0 0 20px rgba(255,153,0,0.4);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--void);
+      color: var(--text);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* ── CRT Scanlines overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,0) 0px,
+        rgba(0,0,0,0) 2px,
+        rgba(0,0,0,0.18) 2px,
+        rgba(0,0,0,0.18) 4px
+      );
+      pointer-events: none;
+      z-index: 9998;
+    }
+
+    /* ── RGB Chromatic aberration strip ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(255,0,0,0.03), rgba(0,255,0,0.015), rgba(0,0,255,0.03));
+      pointer-events: none;
+      z-index: 9997;
+    }
+
+    /* ── Perspective grid ── */
+    .vp-grid {
+      position: absolute;
+      left: 0; right: 0;
+      bottom: 0;
+      height: 400px;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .vp-grid-inner {
+      width: 100%;
+      height: 100%;
+      background-image:
+        linear-gradient(transparent 95%, rgba(255,0,255,0.4) 95%),
+        linear-gradient(90deg, transparent 95%, rgba(255,0,255,0.4) 95%);
+      background-size: 50px 50px;
+      transform: perspective(600px) rotateX(55deg) scale(2.2) translateY(10%);
+      transform-origin: center bottom;
+      -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 70%);
+      mask-image: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 70%);
+    }
+
+    /* ── Floating sun ── */
+    .vp-sun {
+      position: absolute;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: linear-gradient(to bottom, #FF9900, #FF00FF);
+      filter: blur(120px);
+      opacity: 0.12;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--void); }
+    ::-webkit-scrollbar-thumb { background: #FF00FF; border-radius: 0; }
+
+    /* ── Keyframes ── */
+    @keyframes vpPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    @keyframes vpGlowPulse {
+      0%, 100% { box-shadow: var(--glow-m); }
+      50% { box-shadow: 0 0 4px #FF00FF; }
+    }
+    @keyframes vpScanFlicker {
+      0%, 100% { opacity: 1; }
+      92% { opacity: 1; }
+      93% { opacity: 0.85; }
+      94% { opacity: 1; }
+      96% { opacity: 0.9; }
+      97% { opacity: 1; }
+    }
+    @keyframes vpSlideIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes vpBarFill {
+      from { width: 0%; }
+      to   { width: 100%; }
+    }
+    @keyframes vpBlink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+    @keyframes vpRotate45 {
+      from { transform: rotate(45deg); }
+      to   { transform: rotate(90deg); }
+    }
+
+    .vp-animate-in { animation: vpSlideIn 0.25s ease-out both; }
+    .vp-flicker    { animation: vpScanFlicker 8s infinite; }
+    .vp-pulse      { animation: vpPulse 1.5s ease-in-out infinite; }
+    .vp-blink      { animation: vpBlink 1s step-end infinite; }
+
+    /* ── Number inputs ── */
+    input[type="number"]::-webkit-inner-spin-button { opacity: 0.3; }
+    input, select, textarea { -webkit-appearance: none; }
+    select option { background: #1a103c; color: #E0E0E0; }
+  </style>
+</head>
+<body class="vp-flicker">
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>
