@@ -388,9 +388,10 @@ export const TeamBadge = ({ iplTeam, size = 28 }) => {
 };
 
 // ── Player Row (reusable with gradient hover) ─────────────────────────────────
-export const PlayerRow = ({ player, rightContent, onClick, style, extraCols }) => {
+export const PlayerRow = ({ player, rightContent, onClick, style, extraCols, children }) => {
   const [hovered, setHovered] = useState(false);
   const teamColor = TEAM_COLORS[player.iplTeam] || "#888";
+  
 
   return (
     <div
@@ -413,21 +414,18 @@ export const PlayerRow = ({ player, rightContent, onClick, style, extraCols }) =
     >
       <TeamBadge iplTeam={player.iplTeam} size={26} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        {rightContent === undefined ? (
+        {children || (rightContent !== undefined ? rightContent : (
           <>
-            <div style={{ fontFamily: V.fontHead, fontSize: 11, color: V.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {player.name}
-            </div>
+            <div style={{ fontFamily: V.fontHead, fontSize: 11, color: V.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{player.name}</div>
             <div style={{ display: "flex", gap: 5, marginTop: 2, alignItems: "center", flexWrap: "wrap" }}>
               <RolePill role={player.role} />
-              <span style={{ fontFamily: V.fontMono, fontSize: 9, color: teamColor, textShadow: `0 0 3px ${teamColor}`, letterSpacing: "0.06em" }}>
-                {player.iplTeam}
-              </span>
+              <span style={{ fontFamily: V.fontMono, fontSize: 9, color: teamColor, textShadow: `0 0 3px ${teamColor}`, letterSpacing: "0.06em" }}>{player.iplTeam}</span>
             </div>
           </>
-        ) : rightContent}
+        ))}
       </div>
       {extraCols}
+      {/* children slot */}
     </div>
   );
 };
