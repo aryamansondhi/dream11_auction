@@ -33,13 +33,26 @@ router.get("/", async (req, res) => {
       const alreadyScored = scoredSet.has(key);
 
       const involved = players
-        .filter(p => p.iplTeam === f.home || p.iplTeam === f.away)
-        .reduce((acc, p) => {
-          const tid = p.fantasyTeamId;
-          if (!acc[tid]) acc[tid] = { teamId: tid, teamName: p.fantasyTeam.name, manager: p.fantasyTeam.manager, accent: p.fantasyTeam.accent, count: 0 };
-          acc[tid].count++;
-          return acc;
-        }, {});
+      .filter(p => p.iplTeam === f.home || p.iplTeam === f.away)
+      .reduce((acc, p) => {
+        // Skip players not assigned to any fantasy team
+        if (!p.fantasyTeamId || !p.fantasyTeam) return acc;
+
+        const tid = p.fantasyTeamId;
+
+        if (!acc[tid]) {
+          acc[tid] = {
+            teamId: tid,
+            teamName: p.fantasyTeam.name,
+            manager: p.fantasyTeam.manager,
+            accent: p.fantasyTeam.accent,
+            count: 0,
+          };
+        }
+
+        acc[tid].count++;
+        return acc;
+      }, {});
 
       const isPast = f.date < today;
       const isToday = f.date === today;

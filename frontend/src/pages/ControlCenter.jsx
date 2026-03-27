@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../store";
 import { V, IPL_TEAMS, STAT_FIELDS } from "../tokens";
@@ -356,7 +356,9 @@ function TradesOverview({ onBack }) {
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    rostersApi.getAll().then(r => setRosters(r.rosters)).catch(() => {});
+    rostersApi.getAll()
+    .then(r => setRosters(r.rosters))
+    .catch((e) => setErr(e.error || "Failed to load rosters"));
   }, []);
 
   const save = async (teamId) => {
