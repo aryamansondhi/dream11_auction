@@ -339,6 +339,81 @@ function Audit({ onBack }) {
   );
 }
 
+// ── Retained Points Entry ─────────────────────────────────────────────────────
+function RetainedPoints({ onBack }) {
+  const { leaderboard } = useStore();
+  const [teamId, setTeamId] = useState("");
+  const [playerName, setPlayerName] = useState("");
+  const [iplTeam, setIplTeam] = useState("");
+  const [role, setRole] = useState("Batsman");
+  const [points, setPoints] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState("");
+
+  const save = async () => {
+    if (!teamId || !playerName || points === "") { setErr("Fill in all fields."); return; }
+    setSaving(true); setErr(""); setOk("");
+    try {
+      const res = await rostersApi.retain(teamId, { playerName, iplTeam, role, points: parseFloat(points) });
+      setOk(res.message);
+      setPlayerName(""); setIplTeam(""); setPoints("");
+    } catch (e) { setErr(e.error || "Failed"); }
+    setSaving(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
+        <GhostBtn onClick={onBack}>← BACK</GhostBtn>
+        <div style={{ fontFamily: V.fontHead, fontSize: 13, fontWeight: 700, color: V.orange, textShadow: `0 0 6px ${V.orange}` }}>RETAINED_PTS.EXE</div>
+      </div>
+      <div style={{ background: "rgba(255,153,0,0.06)", border: "1px solid rgba(255,153,0,0.3)", borderLeft: `2px solid ${V.orange}`, padding: "10px 14px", marginBottom: 20 }}>
+        <div style={{ fontFamily: V.fontMono, fontSize: 11, color: V.orange, lineHeight: 1.7 }}>
+          Manually log points that stay on a team's total from a player they traded away. Type the player name, pick the team that retains the points, enter the amount.
+        </div>
+      </div>
+      <ErrorBox message={err} />
+      {ok && <div style={{ fontFamily: V.fontMono, fontSize: 11, color: V.green, padding: "8px 12px", background: V.green + "10", border: `1px solid ${V.green}30`, marginBottom: 16 }}>✓ {ok}</div>}
+      <div style={{ display: "grid", gap: 14 }}>
+        <div>
+          <Label>Fantasy team (who retains the points)</Label>
+          <Select value={teamId} onChange={e => setTeamId(e.target.value)}>
+            <option value="">Select team…</option>
+            {leaderboard.map(t => <option key={t.id} value={t.id}>{t.name} — {t.manager}</option>)}
+          </Select>
+        </div>
+        <div>
+          <Label>Player name</Label>
+          <Input type="text" value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="e.g. Krunal Pandya" />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <Label>IPL Team</Label>
+            <Select value={iplTeam} onChange={e => setIplTeam(e.target.value)}>
+              <option value="">Select…</option>
+              {["MI","CSK","RCB","KKR","SRH","GT","RR","DC","PBKS","LSG"].map(t => <option key={t}>{t}</option>)}
+            </Select>
+          </div>
+          <div>
+            <Label>Role</Label>
+            <Select value={role} onChange={e => setRole(e.target.value)}>
+              {["Batsman","Bowler","All-Rounder","Wicket-Keeper"].map(r => <option key={r}>{r}</option>)}
+            </Select>
+          </div>
+        </div>
+        <div>
+          <Label>Points to retain (can be negative)</Label>
+          <Input type="number" step="0.5" value={points} onChange={e => setPoints(e.target.value)} placeholder="e.g. -1 or 45" />
+        </div>
+        <PrimaryBtn onClick={save} disabled={saving || !teamId || !playerName || points === ""}>
+          {saving ? "SAVING…" : "▶ SAVE RETAINED POINTS"}
+        </PrimaryBtn>
+      </div>
+    </div>
+  );
+}
+
 // ── Menu items ────────────────────────────────────────────────────────────────
 const MENU = [
   { id: "crex",       color: "#CC44FF", badge: "PRIMARY SCORING METHOD", title: "Enter CREX Fantasy Points",    desc: "Enter each player's final CREX points directly. C/VC multipliers applied automatically. This is how every match gets scored." },
