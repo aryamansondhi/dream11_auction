@@ -276,8 +276,6 @@ router.get("/audit", async (req, res) => {
   }
 });
 
-module.exports = router;
-
 // ─── POST /api/score/crex ─────────────────────────────────────────────────────
 // CREX direct points entry with C/VC multipliers and trade equalization
 // Body: { label, iplTeam1, iplTeam2, matchDate, matchNumber,
@@ -375,3 +373,6 @@ router.post("/crex", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+
+module.exports = router;

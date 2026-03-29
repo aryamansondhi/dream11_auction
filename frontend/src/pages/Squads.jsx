@@ -163,6 +163,41 @@ export default function Squads() {
               </PlayerRow>
             ))}
           </TerminalCard>
+
+          {/* Retained points from traded-out players */}
+          {team.retainedPlayers?.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontFamily: V.fontMono, fontSize: 9, color: V.sub, marginBottom: 8, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 8 }}>
+                › RETAINED POINTS FROM TRADES
+                <span style={{ color: V.orange, textShadow: `0 0 4px ${V.orange}` }}>
+                  {team.retainedPoints > 0 ? "+" : ""}{team.retainedPoints} pts
+                </span>
+              </div>
+              <div style={{ background: "rgba(0,0,0,0.4)", border: `1px solid ${V.border}`, borderLeft: `2px solid ${V.orange}` }}>
+                {team.retainedPlayers.map((p, i) => (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderBottom: i < team.retainedPlayers.length - 1 ? `1px solid ${V.border}` : "none" }}>
+                    <TeamBadge iplTeam={p.iplTeam} size={22} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: V.fontHead, fontSize: 11, color: V.sub }}>{p.name}</div>
+                      <div style={{ display: "flex", gap: 5, marginTop: 2, alignItems: "center" }}>
+                        <RolePill role={p.role} />
+                        <span style={{ fontFamily: V.fontMono, fontSize: 9, color: "rgba(224,224,224,0.3)" }}>traded out · {p.matches.length}m</span>
+                      </div>
+                    </div>
+                    <span style={{ fontFamily: V.fontHead, fontSize: 14, color: p.points >= 0 ? V.orange : V.red, textShadow: `0 0 6px ${p.points >= 0 ? V.orange : V.red}` }}>
+                      {p.points > 0 ? "+" : ""}{p.points}
+                    </span>
+                  </div>
+                ))}
+                <div style={{ padding: "8px 14px", borderTop: `1px solid ${V.border}`, display: "flex", justifyContent: "space-between", background: "rgba(255,153,0,0.04)" }}>
+                  <span style={{ fontFamily: V.fontMono, fontSize: 9, color: V.sub, letterSpacing: "0.1em" }}>RETAINED TOTAL</span>
+                  <span style={{ fontFamily: V.fontHead, fontSize: 13, color: V.orange, textShadow: `0 0 6px ${V.orange}` }}>
+                    {team.retainedPoints > 0 ? "+" : ""}{team.retainedPoints}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

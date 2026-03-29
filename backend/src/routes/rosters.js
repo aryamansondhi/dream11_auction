@@ -301,4 +301,45 @@ router.patch("/:teamId/trades", requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/rosters/:teamId/retain
+router.post("/:teamId/retain", requireAdmin, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const { playerName, iplTeam, role, points } = req.body;
+    if (!playerName || points === undefined) return res.status(400).json({ error: "playerName and points required" });
+
+    const label = `RETAINED: ${playerName}`;
+    let match = await prisma.match.findFirst({ where: { label, iplTeam1: teamId } });
+    if (!match) {
+      match = await prisma.match.create({
+        data: { label, iplTeam1: teamId, iplTeam2: "", source: "retained", status: "scored" },
+      });
+    }
+
+    let player = await prisma.player.findFirst({
+      where: { name: { contains: playerName, mode: "insensitive" } },
+    });
+    if (!player) {
+      player = await prisma.player.create({
+        data: { name: playerName, role: role || "Batsman", iplTeam: iplTeam || "??", fantasyTeamId: null },
+      });
+    }
+
+    await prisma.playerMatchScore.upsert({
+      where: { matchId_playerId: { matchId: match.id, playerId: player.id } },
+      update: { points: parseFloat(points), fantasyTeamId: teamId },
+      create: {
+        matchId: match.id, playerId: player.id, fantasyTeamId: teamId,
+        points: parseFloat(points), played: true, nameMatchConfidence: 1.0, nameUsed: playerName,
+      },
+    });
+
+    broadcast("match_scored", { matchId: match.id, label: match.label });
+    res.json({ success: true, message: `${playerName}: ${points} pts retained for ${teamId}` });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

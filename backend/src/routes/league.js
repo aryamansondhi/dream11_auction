@@ -45,16 +45,35 @@ router.get("/", async (req, res) => {
       }));
 
       // Total points = ALL scores ever attributed to this team (including swapped-out players)
-      const totalPoints = allScores
-        .filter(ms => ms.fantasyTeamId === team.id)
-        .reduce((s, ms) => s + ms.points, 0);
+      const currentPlayerIds = new Set(team.players.map(p => p.id));
+
+      const retainedScores = allScores.filter(ms =>
+        ms.fantasyTeamId === team.id && !currentPlayerIds.has(ms.playerId)
+      );
+
+      const retainedByPlayer = {};
+      for (const ms of retainedScores) {
+        const pid = ms.playerId;
+        if (!retainedByPlayer[pid]) {
+          retainedByPlayer[pid] = { id: pid, name: ms.player.name, role: ms.player.role, iplTeam: ms.player.iplTeam, points: 0, matches: [] };
+        }
+        retainedByPlayer[pid].points += ms.points;
+        retainedByPlayer[pid].matches.push({ matchLabel: ms.match.label, pts: ms.points });
+      }
+
+      const retainedPlayers = Object.values(retainedByPlayer).sort((a, b) => b.points - a.points);
+      const retainedPoints = retainedPlayers.reduce((s, p) => s + p.points, 0);
+      const currentPoints = players.reduce((s, p) => s + p.totalPoints, 0);
 
       return {
         id: team.id,
         name: team.name,
         manager: team.manager,
         accent: team.accent,
-        totalPoints,
+        totalPoints: currentPoints + retainedPoints,
+        currentPoints,
+        retainedPoints,
+        retainedPlayers,
         players: players.sort((a, b) => b.totalPoints - a.totalPoints),
       };
     });

@@ -347,6 +347,7 @@ const MENU = [
   { id: "auto",       color: V.cyan,    badge: "REFERENCE TOOL",         title: "Parse Scorecard via API",     desc: "Fetch a live or recent match scorecard from CricketData. Claude extracts raw stats for reference. Useful for verifying CREX figures." },
   { id: "screenshot", color: V.magenta, badge: null,                     title: "Import from Screenshot",      desc: "Upload a scorecard image from Cricbuzz or ESPN. Claude reads stats and maps them to your squads." },
   { id: "audit",      color: V.red,     badge: null,                     title: "Rollback & Audit",            desc: "Remove all points from a scored match. Full audit trail in the database." },
+  { id: "retained",   color: V.orange,  badge: "POINTS RETENTION", title: "Log Retained Points", desc: "Manually enter points that stay on a team's total from a traded-out player." },
 ];
 
 function TradesOverview({ onBack }) {
@@ -476,6 +477,7 @@ export default function ControlCenter() {
       {mode === "auto"       && <AutoScore    onBack={() => setMode("home")} onDone={onDone} />}
       {mode === "screenshot" && <Screenshot   onBack={() => setMode("home")} onDone={onDone} />}
       {mode === "audit"      && <Audit        onBack={() => setMode("home")} />}
+      {mode === "retained"   && <RetainedPoints onBack={() => setMode("home")} />}
     </div>
   );
 }
