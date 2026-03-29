@@ -325,6 +325,7 @@ router.post("/crex", async (req, res) => {
       for (const { playerId, points: rawPoints, matchesPlayed = 0 } of playerPoints) {
         const player = players.find(p => p.id === playerId);
         if (!player) continue;
+        if (!player.fantasyTeamId) continue;
 
         const roster = rosterMap[player.fantasyTeamId];
         const isCaptain = roster?.captainId === playerId;

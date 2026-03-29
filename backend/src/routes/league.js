@@ -20,7 +20,17 @@ router.get("/", async (req, res) => {
       },
     });
 
+    // Also get all match scores grouped by fantasyTeamId (includes swapped-out players)
+    const allScores = await prisma.playerMatchScore.findMany({
+      where: { match: { status: "scored" } },
+      include: {
+        player: { select: { id: true, name: true, role: true, iplTeam: true } },
+        match: { select: { label: true, matchDate: true, createdAt: true } },
+      },
+    });
+
     const leaderboard = teams.map(team => {
+      // Current players with their match history
       const players = team.players.map(p => ({
         id: p.id,
         name: p.name,
@@ -34,7 +44,10 @@ router.get("/", async (req, res) => {
         })),
       }));
 
-      const totalPoints = players.reduce((s, p) => s + p.totalPoints, 0);
+      // Total points = ALL scores ever attributed to this team (including swapped-out players)
+      const totalPoints = allScores
+        .filter(ms => ms.fantasyTeamId === team.id)
+        .reduce((s, ms) => s + ms.points, 0);
 
       return {
         id: team.id,

@@ -64,7 +64,8 @@ export const rosters = {
   setCapVC:   (teamId, body) => api.post(`/rosters/${teamId}/captain`, body),
   swap:       (teamId, body) => api.post(`/rosters/${teamId}/swap`, body),
   trades:     ()     => api.get("/rosters/trades"),
-  setTrades: (teamId, tradesUsed) => api.patch(`/rosters/${teamId}/trades`, { tradesUsed }),
+  setTrades:  (teamId, tradesUsed) => api.patch(`/rosters/${teamId}/trades`, { tradesUsed }),
+  retain:     (teamId, body) => api.post(`/rosters/${teamId}/retain`, body),
 };
 
 export const fixtures = {

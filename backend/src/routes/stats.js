@@ -96,7 +96,7 @@ router.get("/match-players", async (req, res) => {
     if (!t1 || !t2) return res.status(400).json({ error: "t1 and t2 required" });
 
     const players = await prisma.player.findMany({
-      where: { iplTeam: { in: [t1, t2] } },
+      where: { iplTeam: { in: [t1, t2] }, fantasyTeamId: { not: null } },
       include: {
         fantasyTeam: { select: { id: true, name: true, manager: true, accent: true } },
         matchScores: {
