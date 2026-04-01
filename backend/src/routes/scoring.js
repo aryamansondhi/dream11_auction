@@ -374,5 +374,46 @@ router.post("/crex", async (req, res) => {
   }
 });
 
+// PATCH /api/score/match/:matchId/player/:playerId
+// Admin corrects a single player's points for a match
+router.patch("/match/:matchId/player/:playerId", async (req, res) => {
+  try {
+    const { matchId, playerId } = req.params;
+    const { points } = req.body;
+    if (points === undefined) return res.status(400).json({ error: "points required" });
+
+    const existing = await prisma.playerMatchScore.findUnique({
+      where: { matchId_playerId: { matchId, playerId } },
+      include: { player: { select: { name: true } }, match: { select: { label: true } } },
+    });
+    if (!existing) return res.status(404).json({ error: "Score not found" });
+
+    const updated = await prisma.playerMatchScore.update({
+      where: { matchId_playerId: { matchId, playerId } },
+      data: { points: parseFloat(points) },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        matchId,
+        action: "score_corrected",
+        details: {
+          player: existing.player.name,
+          match: existing.match.label,
+          oldPoints: existing.points,
+          newPoints: parseFloat(points),
+          by: "admin",
+          at: new Date().toISOString(),
+        },
+      },
+    });
+
+    broadcast("match_scored", { matchId, label: existing.match.label });
+    res.json({ success: true, oldPoints: existing.points, newPoints: parseFloat(points) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 module.exports = router;

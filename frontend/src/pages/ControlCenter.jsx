@@ -248,7 +248,9 @@ function CrexEntry({ onBack, onDone }) {
           <div style={{ fontFamily: V.fontMono, fontSize: 10, color: "rgba(224,224,224,0.25)", marginBottom: 16, letterSpacing: "0.04em" }}>Leave blank to skip a player</div>
 
           {leaderboard.map(team => {
-            const eligible = team.players.filter(p => p.iplTeam === meta.t1 || p.iplTeam === meta.t2);
+            const eligible = team.players
+              .filter(p => p.iplTeam === meta.t1 || p.iplTeam === meta.t2)
+              .sort((a, b) => a.name.localeCompare(b.name));
             if (!eligible.length) return null;
             const teamTotal = eligible.reduce((s, p) => s + (parseFloat(points[p.id]) || 0), 0);
 
@@ -414,6 +416,112 @@ function RetainedPoints({ onBack }) {
   );
 }
 
+// ── Edit Player Score ─────────────────────────────────────────────────────────
+function EditScore({ onBack }) {
+  const { matches, leaderboard } = useStore();
+  const [matchId, setMatchId] = useState("");
+  const [players, setPlayers] = useState([]);
+  const [loadingPlayers, setLoadingPlayers] = useState(false);
+  const [edits, setEdits] = useState({});
+  const [saving, setSaving] = useState(null);
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState("");
+
+  const loadPlayers = async (mid) => {
+    setMatchId(mid); setPlayers([]); setEdits({}); setErr(""); setOk("");
+    if (!mid) return;
+    setLoadingPlayers(true);
+    try {
+      // Get all scores for this match from leaderboard data
+      const allPlayers = leaderboard.flatMap(team =>
+        (team.players || [])
+          .filter(p => p.matchHistory?.some(h => h.matchLabel && matches.find(m => m.id === mid && m.label === h.matchLabel)))
+          .map(p => {
+            const h = p.matchHistory?.find(h => matches.find(m => m.id === mid && m.label === h.matchLabel));
+            return { id: p.id, name: p.name, role: p.role, iplTeam: p.iplTeam, team: team.name, currentPoints: h?.pts ?? 0 };
+          })
+      ).sort((a, b) => a.name.localeCompare(b.name));
+      setPlayers(allPlayers);
+    } catch (e) { setErr("Failed to load players"); }
+    setLoadingPlayers(false);
+  };
+
+  const saveEdit = async (playerId) => {
+    if (edits[playerId] === undefined) return;
+    setSaving(playerId); setErr(""); setOk("");
+    try {
+      const res = await score.editPlayerScore(matchId, playerId, edits[playerId]);
+      setOk(`Saved! ${res.oldPoints} → ${res.newPoints} pts`);
+      setPlayers(p => p.map(pl => pl.id === playerId ? { ...pl, currentPoints: res.newPoints } : pl));
+      setEdits(e => { const n = { ...e }; delete n[playerId]; return n; });
+    } catch (e) { setErr(e.error || "Save failed"); }
+    setSaving(null);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20 }}>
+        <GhostBtn onClick={onBack}>← BACK</GhostBtn>
+        <div style={{ fontFamily: V.fontHead, fontSize: 13, fontWeight: 700, color: V.cyan, textShadow: `0 0 6px ${V.cyan}` }}>EDIT_SCORE.EXE</div>
+      </div>
+      <ErrorBox message={err} />
+      {ok && <div style={{ fontFamily: V.fontMono, fontSize: 11, color: V.green, padding: "8px 12px", background: V.green + "10", border: `1px solid ${V.green}30`, marginBottom: 16 }}>✓ {ok}</div>}
+
+      <div style={{ marginBottom: 16 }}>
+        <Label>Select match to edit</Label>
+        <Select value={matchId} onChange={e => loadPlayers(e.target.value)}>
+          <option value="">Select a scored match…</option>
+          {matches.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </Select>
+      </div>
+
+      {loadingPlayers && <div style={{ fontFamily: V.fontMono, fontSize: 11, color: V.sub }}>Loading players…</div>}
+
+      {players.length > 0 && (
+        <div>
+          <div style={{ fontFamily: V.fontMono, fontSize: 9, color: V.sub, marginBottom: 10, letterSpacing: "0.08em" }}>
+            {players.length} players scored in this match — edit any value and hit SAVE
+          </div>
+          {players.map(p => {
+            const edited = edits[p.id] !== undefined;
+            return (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", background: edited ? "rgba(0,255,255,0.04)" : "rgba(26,16,60,0.5)", border: `1px solid ${edited ? V.cyan + "50" : V.border}`, marginBottom: 5, transition: "all 0.15s" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: V.fontHead, fontSize: 11, color: V.text }}>{p.name}</div>
+                  <div style={{ fontFamily: V.fontMono, fontSize: 9, color: V.sub, marginTop: 2 }}>{p.role} · {p.iplTeam} · {p.team}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontFamily: V.fontMono, fontSize: 10, color: V.sub }}>was:</span>
+                  <span style={{ fontFamily: V.fontHead, fontSize: 13, color: V.sub }}>{p.currentPoints}</span>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    placeholder="new pts"
+                    value={edits[p.id] ?? ""}
+                    onChange={e => setEdits(prev => ({ ...prev, [p.id]: e.target.value === "" ? undefined : parseFloat(e.target.value) }))}
+                    style={{ width: 80, textAlign: "center", fontSize: 12, padding: "5px 8px" }}
+                  />
+                  {edited && (
+                    <button onClick={() => saveEdit(p.id)} disabled={saving === p.id} style={{ background: V.cyan + "18", border: `1px solid ${V.cyan}50`, color: V.cyan, fontFamily: V.fontMono, fontSize: 9, padding: "5px 10px", cursor: "pointer", letterSpacing: "0.1em", whiteSpace: "nowrap" }}>
+                      {saving === p.id ? "…" : "SAVE"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {matchId && !loadingPlayers && players.length === 0 && (
+        <div style={{ fontFamily: V.fontMono, fontSize: 11, color: V.sub, textAlign: "center", padding: "20px 0" }}>
+          No player scores found for this match in the leaderboard cache. Refresh the page and try again.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Menu items ────────────────────────────────────────────────────────────────
 const MENU = [
   { id: "crex",       color: "#CC44FF", badge: "PRIMARY SCORING METHOD", title: "Enter CREX Fantasy Points",    desc: "Enter each player's final CREX points directly. C/VC multipliers applied automatically. This is how every match gets scored." },
@@ -423,6 +531,7 @@ const MENU = [
   { id: "screenshot", color: V.magenta, badge: null,                     title: "Import from Screenshot",      desc: "Upload a scorecard image from Cricbuzz or ESPN. Claude reads stats and maps them to your squads." },
   { id: "audit",      color: V.red,     badge: null,                     title: "Rollback & Audit",            desc: "Remove all points from a scored match. Full audit trail in the database." },
   { id: "retained",   color: V.orange,  badge: "POINTS RETENTION", title: "Log Retained Points", desc: "Manually enter points that stay on a team's total from a traded-out player." },
+  { id: "editscore", color: V.cyan, badge: "ADMIN CORRECTION", title: "Edit Player Score", desc: "Correct a single player's points for any already-scored match." },
 ];
 
 function TradesOverview({ onBack }) {
@@ -553,6 +662,7 @@ export default function ControlCenter() {
       {mode === "screenshot" && <Screenshot   onBack={() => setMode("home")} onDone={onDone} />}
       {mode === "audit"      && <Audit        onBack={() => setMode("home")} />}
       {mode === "retained"   && <RetainedPoints onBack={() => setMode("home")} />}
+      {mode === "editscore"  && <EditScore     onBack={() => setMode("home")} />}
     </div>
   );
 }

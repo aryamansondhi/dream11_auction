@@ -130,7 +130,7 @@ router.get("/match-players", async (req, res) => {
     // Sort each group by role order then points
     const roleOrder = ["Batsman", "All-Rounder", "Wicket-Keeper", "Bowler"];
     Object.keys(grouped).forEach(team => {
-      grouped[team].sort((a, b) => roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role) || b.totalPoints - a.totalPoints);
+      grouped[team].sort((a, b) => a.name.localeCompare(b.name));
     });
 
     res.json({ t1, t2, players: grouped, total: players.length });

@@ -44,6 +44,7 @@ export const score = {
   rollback:       id   => api.post(`/score/${id}/rollback`),
   crex:           body => api.post('/score/crex', body),
   audit:          ()   => api.get("/score/audit"),
+  editPlayerScore: (matchId, playerId, points) => api.patch(`/score/match/${matchId}/player/${playerId}`, { points }),
 };
 
 export default api;
