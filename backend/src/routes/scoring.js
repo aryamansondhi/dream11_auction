@@ -297,9 +297,6 @@ router.post("/crex", async (req, res) => {
     const rosterMap = {};
     rosters.forEach(r => { rosterMap[r.fantasyTeamId] = r; });
 
-    // Load trade logs to check equalization
-    const tradeLogs = await prisma.tradeLog.findMany({ where: { tradeType: "swap" } });
-
     const scoreResults = [];
 
     return await prisma.$transaction(async (tx) => {
@@ -331,15 +328,7 @@ router.post("/crex", async (req, res) => {
 
         // Check equalization: was this player recently traded in?
         // Check equalization: was this player recently traded in?
-        const tradeIn = tradeLogs.find(t => t.playerInId === playerId && t.fantasyTeamId === player.fantasyTeamId);
-        let isEligible = true;
-        if (tradeIn && tradeIn.matchesPlayedByOut > 0) {
-          // Count how many matches this player has actually scored in so far
-          const actualMatchesPlayed = await tx.playerMatchScore.count({
-            where: { playerId, played: true },
-          });
-          isEligible = actualMatchesPlayed >= tradeIn.matchesPlayedByOut;
-        }
+        const isEligible = true;
 
         // Apply multipliers
         let finalPoints = parseFloat(rawPoints) || 0;
