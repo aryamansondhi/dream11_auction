@@ -330,12 +330,15 @@ router.post("/crex", async (req, res) => {
         const isViceCaptain = roster?.viceCaptainId === playerId;
 
         // Check equalization: was this player recently traded in?
+        // Check equalization: was this player recently traded in?
         const tradeIn = tradeLogs.find(t => t.playerInId === playerId && t.fantasyTeamId === player.fantasyTeamId);
         let isEligible = true;
         if (tradeIn && tradeIn.matchesPlayedByOut > 0) {
-          // Player is only eligible once they have played > matchesPlayedByOut matches
-          // matchesPlayed param = how many matches this player has played so far this season
-          isEligible = matchesPlayed > tradeIn.matchesPlayedByOut;
+          // Count how many matches this player has actually scored in so far
+          const actualMatchesPlayed = await tx.playerMatchScore.count({
+            where: { playerId, played: true },
+          });
+          isEligible = actualMatchesPlayed >= tradeIn.matchesPlayedByOut;
         }
 
         // Apply multipliers
